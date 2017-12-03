@@ -1,0 +1,7 @@
+tensorflow >= 1.1.0
+numpy
+matplotlib
+scipy == 0.19.1
+six
+tqdm
+soundfile

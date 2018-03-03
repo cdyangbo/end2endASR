@@ -28,6 +28,35 @@ $python libri_preprocess -m log -f 81 -n dev-clean ~/asr_corpus/librispeech/Libr
   
 ```
 ## 3 train
+run_train.py
+```
+usage: run_train.py [-h] [-rc {gru,lstm,rnn}] [-b BATCH_SIZE] [-n HIDDENS]
+                    [-f {13,39,81,161}] [-c CLASSES] [-rl RNN_LAYERS]
+                    [-cl CONV_LAYERS] [-g GPUS] [-a {relu,tanh,sigmod}]
+                    [-o OPTIMIZER] [-lr LEARNING_RATE] [-k KEEP_PROB]
+                    [-gc GRAD_CLIP] [-m MODE] [-r RESTOREMODEL]
+                    [-bn BATCHNORM] [-p EPOCHS] [-i INITIAL_EPOCH] -t
+                    TRAINFILES [TRAINFILES ...] -d DEVFILES [DEVFILES ...] -s
+                    SAVEPATH [-gf GPU_FRACTION] [-md MODEL]
+                    [-ub USE_BIDIRECTIONAL_RNN] [-us USE_SUMMARY]
+                    [-v VOCABFILE] [--ps_hosts PS_HOSTS] [--ws_hosts WS_HOSTS]
+                    [--job_name {ps,worker}] [--task_index TASK_INDEX]
+
+```
+### 3.1 single machine training 
+```
+deepspeech2 model
+$./run_libri_ds2_train.sh
+las model 
+$./run_libri_las_train.sh
+```
+### 3.2 clustering machine training 
+```
+deepspeech2 model
+$./run_libri_ds2_train_dist.sh
+las model 
+$./run_libri_las_train_dist.sh
+```
 
 ## 4 test
 

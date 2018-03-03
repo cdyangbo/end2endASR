@@ -8,6 +8,8 @@ use tensorflow to implement a end-to-end algorithm according baidu deepspeech pa
 ### 2.1 English corpus:[LibriSpeech](http://www.openslr.org/12)
 ### 2.2 Chinese corpus:[THCHS-30](http://www.openslr.org/18/)
 ### 2.3 preprocess
+#### librispeech
+```
 usage: libri_preprocess [-h] [-m {mfcc,fbank,log}] [-f {13,81,161}]
                         [-wl WINLEN] [-ws WINSTEP] [-s SPLIT]
                         [-n {dev-clean,dev-other,test-clean,test-other,train-clean-100,train-clean-360,train-other-500}]
@@ -19,7 +21,7 @@ param:
      path,corpus data dir
      save,feature save dir
      jsonfile, json file to index all wav feature and ground truth
-     
+```     
 ## 3 train
 
 ## 4 test

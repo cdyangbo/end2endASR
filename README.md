@@ -24,7 +24,7 @@ param:
 ```   
 ``` 
 sample script
-$python libri_preprocess -m log -f 81 -n dev-clean ~/asr_corpus/librispeech/LibriSpeech ~/asr_corpus/librispeech_feat ~/asr_corpus/dev-clean-featlabel.json
+$python libri_preprocess.py -m log -f 81 -n dev-clean ~/asr_corpus/librispeech/LibriSpeech ~/asr_corpus/librispeech_feat ~/asr_corpus/dev-clean-featlabel.json
   
 ```
 ## 3 train

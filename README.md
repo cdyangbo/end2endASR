@@ -22,7 +22,8 @@ param:
      save,feature save dir
      jsonfile, json file to index all wav feature and ground truth
 ```   
-``` sample
+``` 
+sample script
 $python libri_preprocess -m log -f 81 -n dev-clean ~/asr_corpus/librispeech/LibriSpeech ~/asr_corpus/librispeech_feat ~/asr_corpus/dev-clean-featlabel.json
   
 ```

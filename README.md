@@ -52,10 +52,17 @@ $./run_libri_las_train.sh
 ```
 ### 3.2 clustering machine training 
 ```
+two gpu cars.
 deepspeech2 model
-$./run_libri_ds2_train_dist.sh
+$./run_libri_ds2_train_dist.sh ps 0
+$./run_libri_ds2_train_dist.sh worker 0
+$./run_libri_ds2_train_dist.sh worker 1
+
 las model 
-$./run_libri_las_train_dist.sh
+$./run_libri_las_train_dist.sh ps 0
+$./run_libri_las_train_dist.sh worker 0
+$./run_libri_las_train_dist.sh worker 1
+
 ```
 
 ## 4 test

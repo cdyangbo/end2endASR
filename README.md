@@ -47,6 +47,10 @@ usage: run_train.py [-h] [-rc {gru,lstm,rnn}] [-b BATCH_SIZE] [-n HIDDENS]
 ```
 deepspeech2 model
 $./run_libri_ds2_train.sh
+```
+![](https://github.com/cdyangbo/end2endASR/blob/master/images/ds2_single.png)
+
+```
 las model 
 $./run_libri_las_train.sh
 ```
@@ -59,7 +63,10 @@ deepspeech2 model
 $./run_libri_ds2_train_dist.sh ps 0
 $./run_libri_ds2_train_dist.sh worker 0
 $./run_libri_ds2_train_dist.sh worker 1
+```
+![](https://github.com/cdyangbo/end2endASR/blob/master/images/ds2_cluster.png)
 
+```
 las model 
 $./run_libri_las_train_dist.sh ps 0
 $./run_libri_las_train_dist.sh worker 0

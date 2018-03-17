@@ -49,9 +49,9 @@ deepspeech2 model
 $./run_libri_ds2_train.sh
 las model 
 $./run_libri_las_train.sh
+```
 ![](https://github.com/cdyangbo/end2endASR/blob/master/images/las_single.png)
 
-```
 ### 3.2 clustering machine training 
 ```
 two gpu cards.

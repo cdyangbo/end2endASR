@@ -55,8 +55,13 @@ class DataGenerator(object):
         self.max_time_length=max_time_length #default use batch max time length
         self.max_label_length=max_label_length
 
-        self.load_desc_file(feat_label_descfile, max_duration= self.max_time_length or 10)
+        # time_length * win_step=0.01
+        self.load_desc_file(feat_label_descfile,
+                            max_duration= self.max_time_length * 0.01  if self.max_time_length is not None else 10)
 
+
+        print('================in DataGenerator===========================')
+        print(max_time_length,max_label_length)
 
     @staticmethod
     @describe
@@ -85,7 +90,7 @@ class DataGenerator(object):
                     try:
                         total_files += 1
                         spec = json.loads(json_line)
-                        if(float(spec['duration']) > max_duration):
+                        if float(spec['duration']) > max_duration:
                             #print('time too long :{}, {}'.format(spec['key'], spec['duration']))
                             nouse_files += 1
                             continue
@@ -136,18 +141,30 @@ class DataGenerator(object):
         features = []
         labels = []
 
+        max_label_length = 0
         for f in feat_label_paths:
             feat,label = self.load_feat_label(f)
             features.append(feat)
-            labels.append(label)
             if len(label) == 0:
                 raise Exception('target label length==0, file:{}'.format(f))
             if self.max_label_length is not None:
-                if len(label) > self.max_label_length:
-                    print('target label length={},file:{}'.format(len(label),f))
+                label_len = len(label)
+                if label_len > self.max_label_length:
+                    label = label[:self.max_label_length]
+                    print('big target label length={},cut it to max {},file:{}'.format(label_len,len(label),f))
 
-        input_lengths = [f.shape[0] for f in features]
-        max_length = max(input_lengths)
+            max_label_length = max(max_label_length, len(label))
+            labels.append(label)
+
+        input_lengths =[f.shape[0] for f in features]
+        max_input_length = max(input_lengths)
+
+        if self.max_time_length is not None:
+            max_input_length = max(max_input_length, self.max_time_length)
+
+        if self.max_label_length is not None:
+            max_label_length = max(max_label_length, self.max_label_length)
+
 
         feature_dim = features[0].shape[1]
         mb_size = len(features)
@@ -156,10 +173,11 @@ class DataGenerator(object):
 
         #x = np.zeros((mb_size, max_length, feature_dim))
         #[T,B,F]
-        x = np.zeros((max_length, mb_size, feature_dim))
+        x = np.zeros((max_input_length, mb_size, feature_dim))
         y = []
         label_lengths = []
-        pad_y = []
+        pad_y = np.zeros((mb_size, max_label_length))
+
         for i in range(mb_size):
             feat = features[i]
             feat = self.normalize(feat)  # Center using means and std
@@ -168,6 +186,9 @@ class DataGenerator(object):
             label_len = len(label)
             y.append(label)
             label_lengths.append(label_len)
+            pad_y[i,:len(label)] = label
+
+
         sparseY = self.list_to_sparse_tensor(y)
         # Flatten labels to comply with warp-CTC signature
         #y = reduce(lambda i, j: i + j, y)
@@ -260,14 +281,15 @@ class DataGenerator(object):
         self.feats_std = np.std(feats, axis=0)
 
 if __name__ == '__main__':
-    train_json=['../libri_test_clean.json', '../libri_test_other.json']
+    train_json=['../libri_featlabel/test-clean.json', '../libri_featlabel/test-other.json']
 
 
-    t = DataGenerator(train_json, True)
+    t = DataGenerator(train_json, True, 1000, 100)
     t.fit_train()
 
     for i ,batch in enumerate(t.iterate_train(16)):
         print(i, batch['x'].shape)
+        print(i, batch['pady'].shape)
 
 
 

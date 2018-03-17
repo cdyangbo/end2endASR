@@ -145,12 +145,16 @@ class DeepSpeech2(object):
         self.targetVals = tf.placeholder(tf.int32, name='targetVals')
         self.targetShape = tf.placeholder(tf.int64, name='targetShape')
         self.targetY = tf.SparseTensor(self.targetIxs, self.targetVals, self.targetShape)
-        self.seqLengths = tf.placeholder(tf.int32, shape=(self.args.batch_size), name='inputSeqLengths')
+        self.input_seq_length = tf.placeholder(tf.int32, shape=(self.args.batch_size), name='inputSeqLengths')
+        # the length of all the output sequences
+        self.target_seq_length = tf.placeholder(dtype=tf.int32,
+                                                shape=(self.args.batch_size),
+                                                name='target_seq_length')
         self.global_step = tf.Variable(0, name='global_step', trainable=False)
 
 
     def add_ds2_layer(self):
-        self.logits3d = build_ds2(self.args, self.inputX, self.cell_fn, self.activation, self.seqLengths,
+        self.logits3d = build_ds2(self.args, self.inputX, self.cell_fn, self.activation, self.input_seq_length,
                                   is_training=self.is_training,
                                   convlayers=self.args.conv_layers,
                                   rnnlayers=self.args.rnn_layers,
@@ -159,7 +163,7 @@ class DeepSpeech2(object):
 
     def add_backward_path(self):
         # TBD: will move to trainer or tester class later!!!
-        self.loss = tf.reduce_mean(tf.nn.ctc_loss(self.targetY, self.logits3d, self.seqLengths))
+        self.loss = tf.reduce_mean(tf.nn.ctc_loss(self.targetY, self.logits3d, self.input_seq_length))
         self.var_op = tf.global_variables()
         self.var_trainable_op = tf.trainable_variables()
 
@@ -182,10 +186,10 @@ class DeepSpeech2(object):
                 self.train_op = opti.apply_gradients(zip(grads, self.var_trainable_op), global_step=self.global_step)
 
         self.predictions = tf.to_int32(
-            tf.nn.ctc_beam_search_decoder(self.logits3d, self.seqLengths, merge_repeated=False)[0][0])
+            tf.nn.ctc_beam_search_decoder(self.logits3d, self.input_seq_length, merge_repeated=False)[0][0])
         self.errorRate = tf.reduce_sum(tf.edit_distance(self.predictions, self.targetY, normalize=True))
         self.initial_op = tf.global_variables_initializer()
-        self.saver = tf.train.Saver(tf.global_variables(), max_to_keep=5, keep_checkpoint_every_n_hours=3)
+        self.saver = tf.train.Saver()
 
         # summary
         if self.args.use_summary == 'yes':

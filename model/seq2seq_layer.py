@@ -1,9 +1,10 @@
 #-*- coding:utf-8 -*-
+from functools import partial
 import os,time,datetime
 import numpy as np
 import tensorflow as tf
 from abc import ABCMeta, abstractmethod
-
+from utils.misc import describe
 
 def pyramid_stack(inputs, sequence_lengths, scope=None, time_major=False):
     '''
@@ -191,12 +192,15 @@ class BRNNLayer(object):
                                        activation=self.activation)
 
             # do the forward computation
+
+
             outputs_tupple, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw=rnn_cell_fw,
                                                                 cell_bw=rnn_cell_bw,
                                                                 inputs=inputs,
                                                                 dtype=tf.float32,
                                                                 sequence_length=sequence_length,
                                                                 time_major=time_major)
+
 
             outputs = tf.concat(outputs_tupple, 2)
 
@@ -304,9 +308,9 @@ class Listener(Encoder):
             name: the name of the Listener
         '''
 
-        self.numlayers = conf['listener_numlayers']
-        self.numunits = conf['listener_numunits']
-        self.dropout = conf['listener_dropout']
+        self.numlayers = int(conf['listener_numlayers'])
+        self.numunits = int(conf['listener_numunits'])
+        self.dropout = float(conf['listener_dropout'])
 
         if conf['listener_cell'] == 'gru':
             self.cell_fn = tf.contrib.rnn.GRUCell
@@ -350,13 +354,13 @@ class Listener(Encoder):
         for l in range(int(self.numlayers)):
             outputs, output_seq_lengths = self.pbrnn(outputs, output_seq_lengths, 'Listener%d' % l, time_major=time_major)
 
-            if float(self.conf['listener_dropout']) < 1 and is_training:
-                outputs = tf.nn.dropout(outputs, float(self.conf['listener_dropout']))
+            if self.dropout < 1 and is_training:
+                outputs = tf.nn.dropout(outputs, self.dropout)
 
         outputs = self.brnn(outputs, output_seq_lengths, 'Listener%d' % int(self.numlayers), time_major=time_major)
 
-        if float(self.dropout) < 1 and is_training:
-            outputs = tf.nn.dropout(outputs, float(self.dropout))
+        if self.dropout < 1 and is_training:
+            outputs = tf.nn.dropout(outputs, self.dropout)
 
         return outputs
 
@@ -446,10 +450,10 @@ class Speller(Decoder):
     '''a speller decoder for the LAS architecture'''
 
     def __init__(self, conf, output_dim, name=None):
-        self.sample_prob = conf['speller_sample_prob']
-        self.numlayers = conf['speller_numlayers']
-        self.numunits = conf['speller_numunits']
-        self.dropout = conf['speller_dropout']
+        self.sample_prob = float(conf['speller_sample_prob'])
+        self.numlayers = int(conf['speller_numlayers'])
+        self.numunits = int(conf['speller_numunits'])
+        self.dropout = float(conf['speller_dropout'])
 
         if conf['speller_cell'] == 'gru':
             self.cell_fn = tf.contrib.rnn.GRUCell
@@ -503,7 +507,7 @@ class Speller(Decoder):
         rnn_cell = self.create_rnn(is_training)
 
         # create the loop functions
-        lf = partial(loop_function, time_major_inputs, float(self.sample_prob))
+        lf = partial(loop_function, time_major_inputs, self.sample_prob)
 
         if time_major:
             # to [batch_size,att_length,att_size]
@@ -544,9 +548,8 @@ class Speller(Decoder):
                                     #reuse=tf.get_variable_scope().reuse,
                                     activation=self.activation)
 
-            if float(self.dropout) < 1 and is_training:
-                rnn_cell = tf.contrib.rnn.DropoutWrapper(rnn_cell,
-                                                         output_keep_prob=float(self.dropout))
+            if self.dropout < 1 and is_training:
+                rnn_cell = tf.contrib.rnn.DropoutWrapper(rnn_cell, output_keep_prob=self.dropout)
 
             rnn_cells.append(rnn_cell)
 
@@ -608,7 +611,7 @@ class TSClassifier(object):
 
         self.conf = conf
         self.output_dim = int(output_dim)
-        self.input_dim = conf['input_dim']
+        self.input_dim = int(conf['input_dim'])
 
         #increase the output dim with the amount of labels that should be added
         self.output_dim += int(conf['add_labels'])
@@ -686,6 +689,7 @@ class TSClassifier(object):
         '''
         return tf.get_collection(tf.GraphKeys.GLOBAL_VARIABLES,scope=self.scope.name)
 
+    @describe
     def compute_ctc_loss(self, targets, logits, logit_seq_length,
                          target_seq_length, time_major=False):
         '''
@@ -734,6 +738,7 @@ class TSClassifier(object):
 
         return loss
 
+    @describe
     def compute_ce_loss(self, targets, logits, logit_seq_length,
                      target_seq_length,time_major=False):
         '''
@@ -775,7 +780,7 @@ class TSClassifier(object):
             nonseq_targets = tf.concat(split_targets, 0)
 
             # convert the logits to non sequential data
-            nonseq_logits = seq2nonseq(logits, logit_seq_length)
+            nonseq_logits = seq2nonseq(logits, logit_seq_length, time_major=time_major)
 
             # one hot encode the targets
             # pylint: disable=E1101
@@ -798,3 +803,35 @@ class TSClassifier(object):
         :param stride:
         :return:
         '''
+
+
+if __name__ == '__main__':
+
+    inputs = tf.placeholder(dtype=tf.float32, shape=(32,1000,81))
+    input_seq_lengths = tf.placeholder(dtype=tf.int32, shape=(32))
+
+    pbrl = PydBRNNLayer(512)
+
+    outputs,outputs_seq_length = pbrl(inputs, input_seq_lengths, 'aaa', time_major=False)
+
+    print(outputs.get_shape())
+
+    from   six.moves  import configparser
+
+
+    parsedlas_cfg = configparser.ConfigParser()
+    parsedlas_cfg.read('conf/las_network.conf')
+    las_cfg = dict(parsedlas_cfg.items('las'))
+    print(las_cfg)
+    l = Listener(las_cfg)
+    outputs, _ =  l.pbrnn(inputs, input_seq_lengths, 'aaa', False)
+    #outputs = l(inputs,input_seq_lengths,'listener1', time_major=False)
+
+    print(outputs.get_shape())
+
+
+
+
+
+
+

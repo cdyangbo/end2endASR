@@ -74,17 +74,18 @@ def output_to_sequence(lmt, vocab, sp=None):
     return out_seqs
 
 
-def output_to_sequence_dense(lmt, vocab, sp=None):
+def output_to_sequence_dense(lmt, vocab, sp=None, label_length=None):
     sequences = lmt
     if sp is None:
         sp = ''
     out_seqs = []
+
     for i in range(len(sequences)):
         indexes = sequences[i]
+        if label_length is not None:
+            indexes = indexes[:label_length[i]]
         seq = []
         for ind in indexes:
-            if ind == 0: # pad tag,may be -1 or something
-                break
             seq.append(vocab[ind])
         seq = sp.join(seq)
         out_seqs.append(seq)

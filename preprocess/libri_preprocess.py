@@ -135,7 +135,7 @@ if __name__ == "__main__":
     parser.add_argument("save", help="Directory where preprocessed arrays are to be saved",type=str)
     parser.add_argument("jsonfile", help="json file name where preprocessed arrays are to be saved to", type=str)
     parser.add_argument("-m", "--mode", help="Mode",choices=['mfcc', 'fbank','log'],type=str, default='fbank')
-    parser.add_argument("-f", "--featlen", help='Features length', type=int, choices=[13,39,81,161],default=13)
+    parser.add_argument("-f", "--featlen", help='Features length', type=int, choices=[13,81,61],default=13)
     parser.add_argument("-wl", "--winlen", type=float, default=0.02, help="specify the window length of feature")
     parser.add_argument("-ws", "--winstep", type=float,default=0.01, help="specify the window step length of feature")
     parser.add_argument("-s", "--split", type=str, default=None, help="split to train/dev/test ratio of one path, None do nothing")

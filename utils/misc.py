@@ -1,6 +1,7 @@
 #-*- coding:utf-8 -*-
 import os
 import  time
+from functools import wraps
 
 def log(info, logfilename='log.txt',savepath = None, debug=True):
     t = time.localtime(int(time.time()))
@@ -65,3 +66,17 @@ def saveArgs(args, cmdstr, filename='args.conf'):
                 f.write(k + '=' + ' '.join(v) + '=list\n')
             else:
                 raise Exception('no supported data type:{}'.format(v))
+
+
+def describe(func):
+    ''' wrap function,to add some descriptions for function and its running time
+    '''
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        print(func.__name__+'...')
+        start = time.time()
+        result = func(*args, **kwargs)
+        end = time.time()
+        print(str(func.__name__+' in '+ str(end-start)+' s'))
+        return result
+    return wrapper

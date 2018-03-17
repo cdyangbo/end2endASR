@@ -18,9 +18,9 @@ import random,tqdm
 import sys
 sys.path.append('../')
 
-from utils.vocab_utils import loadvocabulary,output_to_sequence
+from utils.vocab_utils import loadvocabulary,output_to_sequence,output_to_sequence_dense
 from utils.wer import wer,cer
-from utils.misc import log
+from utils.misc import log, describe
 
 from model.model_factory import model_factory
 from preprocess.data_generator import DataGenerator
@@ -75,7 +75,10 @@ class Trainer(object):
             else:  # worker
                 self.device = tf.train.replica_device_setter(worker_device='/job:worker/task:%d' % self.args.task_index,
                                                              cluster=cluster)
+        else:
+            print("single train mode", self.server, self.device)
 
+    @describe
     def build_model(self, save_model_per_iters=500, val_loss_per_iters=100):
         self.classifier = model_factory(args=self.args, server=self.server, device=self.device)
         self.save_model_per_iters = save_model_per_iters
@@ -86,40 +89,66 @@ class Trainer(object):
                 self.train_summary_writer = tf.summary.FileWriter(
                     os.path.join(self.args.savepath,'log/train',self.args.model),self.classifier.graph)
             else:
-                self.train_summary_writer = tf.summary.FileWriter(
+                self.test_summary_writer = tf.summary.FileWriter(
                     os.path.join(self.args.savepath, 'log/test', self.args.model), self.classifier.graph)
 
 
     def init_batch_gen(self,train_jsons=[], dev_jsons=[],major_time=False,fit_samples=500):
+
+        max_time_length = None
+        max_label_length = None
+
+        if self.args.model == 'las':
+            max_time_length = self.classifier.max_input_length
+            max_label_length = self.classifier.max_target_length
+
+
         if len(train_jsons)>0:
-            self.train_batchgen = DataGenerator(train_jsons,major_time = major_time)
+            self.train_batchgen = DataGenerator(train_jsons,major_time = major_time,
+                                                max_time_length=max_time_length,max_label_length=max_label_length)
             self.train_batchgen.fit_train(fit_samples)
 
         if len(dev_jsons)>0:
-            self.dev_batchgen = DataGenerator(dev_jsons,major_time = major_time)
+            self.dev_batchgen = DataGenerator(dev_jsons,major_time = major_time,
+                                              max_time_length=max_time_length,max_label_length=max_label_length)
             self.dev_batchgen.fit_train(fit_samples)
 
         if len(train_jsons) == 0 and len(dev_jsons) == 0 :
             raise  Exception('no json desc files.')
 
-    def get_feed_dict(self, batch):
+    def get_feed_dict(self, batch, input_type='sparse'):
         feed_dict = {}
-        inputx = batch['x']
-        sparsey = batch['sparsey']
-        seqlengths = batch['input_lengths']
+        if input_type == 'sparse':
+            inputx = batch['x']
+            sparsey = batch['sparsey']
+            seqlengths = batch['input_lengths']
 
-        max_input_seq_length = max(seqlengths)
-        #print(max_input_seq_length)
-        seqlens = [self.classifier.compute_conv_output_length(i) for i in seqlengths]
+            #max_input_seq_length = max(seqlengths)
+            #print(max_input_seq_length)
+            seqlens = [self.classifier.compute_conv_output_length(i) for i in seqlengths]
 
-        target_ixs,target_vals,target_shape = sparsey
+            target_ixs,target_vals,target_shape = sparsey
 
-        feed_dict[self.classifier.inputX] = inputx
-        feed_dict[self.classifier.targetIxs] = target_ixs
-        feed_dict[self.classifier.targetVals] = target_vals
-        feed_dict[self.classifier.targetShape] = target_shape
-        feed_dict[self.classifier.seqLengths] = seqlens
+            feed_dict[self.classifier.inputX] = inputx
+            feed_dict[self.classifier.targetIxs] = target_ixs
+            feed_dict[self.classifier.targetVals] = target_vals
+            feed_dict[self.classifier.targetShape] = target_shape
+            feed_dict[self.classifier.input_seq_length] = seqlens
 
+        elif input_type == 'dense':
+            inputx = batch['x']
+            pady = batch['pady']
+            seqlengths = batch['input_lengths']
+            label_lengths = batch['label_lengths']
+
+            #max_input_seq_length = max(seqlengths)
+            # print(max_input_seq_length)
+            input_seqlens = [self.classifier.compute_conv_output_length(i) for i in seqlengths]
+
+            feed_dict[self.classifier.inputX] = inputx
+            feed_dict[self.classifier.targetY] = pady
+            feed_dict[self.classifier.input_seq_length] = input_seqlens
+            feed_dict[self.classifier.target_seq_length] = label_lengths
 
         return feed_dict
 
@@ -160,7 +189,7 @@ class Trainer(object):
         sv = tf.train.Supervisor(graph=self.classifier.graph,
                                  is_chief=self.is_chief,
                                  logdir=self.args.savepath,
-                                 init_op= self.classifier.global_step,#tf.global_variables_initializer(),
+                                 init_op= self.classifier.initial_op,#tf.global_variables_initializer(),
                                  global_step=self.classifier.global_step,
                                  #saver=self.classifier.saver,
                                  #summary_op=self.classifier.summary_op,
@@ -195,19 +224,21 @@ class Trainer(object):
         for i, batch in enumerate(tq):
             #if sv is not None and sv.should_stop():
             #    break
-
-            feed_dict = self.get_feed_dict(batch)
+            if self.args.model == 'ds2':
+                feed_dict = self.get_feed_dict(batch,'sparse')
+            else:
+                feed_dict = self.get_feed_dict(batch, 'dense')
 
             if self.write_summary:
-                _, step, summary, loss, er,seqlens = sess.run([self.classifier.train_op,self.classifier.global_step,
-                                                               self.classifier.summary_op,self.classifier.loss,
-                                                               self.classifier.errorRate,self.classifier.seqLengths],
-                                                              feed_dict=feed_dict)
+                _, step, summary, loss, seqlens = sess.run([self.classifier.train_op,self.classifier.global_step,
+                                                            self.classifier.summary_op,self.classifier.loss,
+                                                            self.classifier.input_seq_length],
+                                                           feed_dict=feed_dict)
                 self.train_summary_writer.add_summary(summary,step)
             else:
-                _, step, loss, er,seqlens= sess.run([self.classifier.train_op, self.classifier.global_step,
-                                                     self.classifier.loss,self.classifier.errorRate,self.classifier.seqLengths],
-                                                    feed_dict=feed_dict)
+                _, step, loss, seqlens= sess.run([self.classifier.train_op, self.classifier.global_step,
+                                                  self.classifier.loss,self.classifier.input_seq_length],
+                                                 feed_dict=feed_dict)
 
             max_input_seq_length = max(seqlens)
 
@@ -218,9 +249,9 @@ class Trainer(object):
             if step % self.val_loss_per_iters == 0:
                 val_cost = self.run_validate_loss_epoch(sess, batch_size)
                 self.val_costs.append([step, val_cost])
-                tq.set_postfix(refresh=False, step=str(step), acc=er, loss=loss,valoss=val_cost)
+                tq.set_postfix(refresh=False, step=str(step), loss=loss,valoss=val_cost)
             else:
-                tq.set_postfix(refresh=False, step=str(step), acc=er, loss=loss)
+                tq.set_postfix(refresh=False, step=str(step), loss=loss)
                 #print('epoch:{},iters:{},global_step:{},loss:{},acc:{}'.format(epoch,i,step,loss,er))
 
             # save model params and loss
@@ -253,7 +284,11 @@ class Trainer(object):
                                                           allow_smaller_final_batch=False)
 
         for i, batch in enumerate(val_batchs):
-            feed_dict = self.get_feed_dict(batch)
+            if self.args.model == 'ds2':
+                feed_dict = self.get_feed_dict(batch,'sparse')
+            else:
+                feed_dict = self.get_feed_dict(batch, 'dense')
+
             loss = sess.run(self.classifier.loss,feed_dict=feed_dict)
             avg_loss += loss
 
@@ -281,14 +316,19 @@ class Trainer(object):
         real_batch_num = 0
         for i, batch in enumerate(val_batchs):
             real_batch_num += 1
-            feed_dict = self.get_feed_dict(batch)
-            loss, pre, y = sess.run([self.classifier.loss,
+            if self.args.model == 'ds2':
+                feed_dict = self.get_feed_dict(batch, 'sparse')
+            else:
+                feed_dict = self.get_feed_dict(batch, 'dense')
+
+            loss, pre, y,label_seq_lens = sess.run([self.classifier.loss,
                                      self.classifier.predictions,
-                                     self.classifier.targetY],
+                                     self.classifier.targetY,
+                                     self.classifier.target_seq_length],
                                     feed_dict=feed_dict)
             avg_loss += loss
 
-            we, wn, ce, cn = self.decode(y, pre, i, batch_size)
+            we, wn, ce, cn = self.decode(y, pre, i, batch_size, label_seq_length=label_seq_lens)
             total_err += we
             total_num += wn
             tchar_err += ce
@@ -346,8 +386,13 @@ class Trainer(object):
             print('=======wait master to initModelParams=================')
 
     #greedy decode
-    def decode(self, y, pred, batch_no, batch_size, debuglines =1, logfile='decode_dev.txt'):
-        ys = output_to_sequence(y, self.index_map)
+    def decode(self, y, pred, batch_no, batch_size, debuglines =1, logfile='decode_dev.txt', label_seq_length=None):
+        print(y.shape)
+        print(y)
+        if self.args.model == 'las':
+            ys = output_to_sequence_dense(y, self.index_map)
+        else:
+            ys = output_to_sequence(y, self.index_map)
         preds = output_to_sequence(pred, self.index_map)
 
         ground_truth = ''

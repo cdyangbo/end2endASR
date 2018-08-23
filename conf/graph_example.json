@@ -1,0 +1,15 @@
+{
+  "model":"ds2",    "network model,now support ds2,las":"",
+  "rnncell":"gru",  "rnn cell type,choices[gru,lstm,rnn]":"",
+  "hiddens":1024,   "hidden neurons":"",
+  "features":81,    "speech feature dims, 13 for mfcc, 39 for fbank, 81 for 4k log, 161 for 8k log":"",
+  "classes":29,     "target label nums":"",
+  "conv_layers":2,  "CONV layers":"",
+  "rnn_layers":5,    "rnn layers":"",
+  "activation":"relu","action func:relu, tanh, sigmod,elu":"",
+  "optimizer":"adam","optimizer func,adam":"",
+  "batchnorm":"yes","batchnorm yes,no":"",
+  "use_bidirectional_rnn":"yes","bidirection rnn":"",
+  "grad_clip":1.0,"grad_clip parms":"",
+  "keep_prob":0.9,"keep_prob prams":""
+}

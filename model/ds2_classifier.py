@@ -67,8 +67,13 @@ def build_ds2(args,
 
     if use_bidirection_rnn:
         for ri in range(rnnlayers):
-            forward_cell = cell_fn(args.hiddens, activation=activation_fn)
-            backward_cell = cell_fn(args.hiddens, activation=activation_fn)
+            if args.rnncell == 'lstm':
+                forward_cell = cell_fn(args.hiddens, activation=activation_fn,cell_clip=args.grad_clip,use_peepholes=False)
+                backward_cell = cell_fn(args.hiddens, activation=activation_fn,cell_clip=args.grad_clip,use_peepholes=False)
+            else:
+                forward_cell = cell_fn(args.hiddens, activation=activation_fn)
+                backward_cell = cell_fn(args.hiddens, activation=activation_fn)
+
             layer, _ = tf.nn.bidirectional_dynamic_rnn(cell_fw=forward_cell,
                                                        cell_bw=backward_cell,
                                                        inputs=layer,
@@ -87,7 +92,10 @@ def build_ds2(args,
                 layer = tf.contrib.layers.dropout(layer, keep_prob=args.keep_prob, is_training=is_training)
     else:
         for ri in range(rnnlayers):
-            rnncell = cell_fn(args.hiddens, activation=activation_fn)
+            if args.rnncell == 'lstm':
+                rnncell = cell_fn(args.hiddens, activation=activation_fn,cell_clip=args.grad_clip,use_peepholes=False)
+            else:
+                rnncell = cell_fn(args.hiddens, activation=activation_fn)
             layer, _ = tf.nn.dynamic_rnn(cell=rnncell,
                                          inputs=layer,
                                          seqLengths=seqLengths,
@@ -116,7 +124,8 @@ class DeepSpeech2(object):
         if args.rnncell =='gru':
             self.cell_fn = tf.contrib.rnn.GRUCell
         elif args.rnncell == 'lstm':
-            self.cell_fn = tf.contrib.rnn.BasicLSTMCell
+            #self.cell_fn = tf.contrib.rnn.BasicLSTMCell
+            self.cell_fn = tf.nn.rnn_cell.LSTMCell
         elif args.rnncell == 'rnn':
             self.cell_fn = tf.contrib.rnn.BasicRNNCell
         else:
@@ -126,6 +135,10 @@ class DeepSpeech2(object):
             self.activation = tf.nn.relu
         elif args.activation == 'tanh':
             self.activation = tf.nn.tanh
+        elif args.activation == 'elu':
+            self.activation = tf.nn.elu
+        elif args.activation == 'sigmod':
+            self.activation = tf.nn.sigmoid
         else:
             raise Exception('activation not supported:{}'.format(args.activation))
 
@@ -169,21 +182,23 @@ class DeepSpeech2(object):
 
         update_ops = tf.get_collection(tf.GraphKeys.UPDATE_OPS)
 
-        if self.args.grad_clip == -1:
-            # not apply gradient clipping
-            with tf.control_dependencies(update_ops):
-                self.train_op = tf.train.AdamOptimizer(self.args.learning_rate).minimize(self.loss,
-                                                                                    global_step=self.global_step)
-        else:
-            # apply gradient clipping
-            gradients = tf.gradients(self.loss, self.var_trainable_op)
-            if self.args.use_summary == 'yes':
-                tf.summary.scalar('global_gradient_norm', tf.global_norm(gradients))
 
-            grads, _ = tf.clip_by_global_norm(gradients, self.args.grad_clip)
-            opti = tf.train.AdamOptimizer(self.args.learning_rate)
-            with tf.control_dependencies(update_ops):
-                self.train_op = opti.apply_gradients(zip(grads, self.var_trainable_op), global_step=self.global_step)
+        if self.is_training:
+            if self.args.grad_clip == -1:
+                # not apply gradient clipping
+                with tf.control_dependencies(update_ops):
+                    self.train_op = tf.train.AdamOptimizer(self.args.learning_rate).minimize(self.loss,
+                                                                                        global_step=self.global_step)
+            else:
+                # apply gradient clipping
+                gradients = tf.gradients(self.loss, self.var_trainable_op)
+                if self.args.use_summary == 'yes':
+                    tf.summary.scalar('global_gradient_norm', tf.global_norm(gradients))
+
+                grads, _ = tf.clip_by_global_norm(gradients, self.args.grad_clip)
+                opti = tf.train.AdamOptimizer(self.args.learning_rate)
+                with tf.control_dependencies(update_ops):
+                    self.train_op = opti.apply_gradients(zip(grads, self.var_trainable_op), global_step=self.global_step)
 
         self.predictions = tf.to_int32(
             tf.nn.ctc_beam_search_decoder(self.logits3d, self.input_seq_length, merge_repeated=False)[0][0])

@@ -19,7 +19,7 @@ if __name__ == '__main__':
     parser.add_argument('-rl', '--rnn_layers', default=7, type=int, help='rnncell')
     parser.add_argument('-cl', '--conv_layers', default=3, type=int, help='rnncell')
     parser.add_argument('-g', '--gpus', default=1, type=int, help='rnncell')
-    parser.add_argument('-a', '--activation', choices=['relu', 'tanh', 'sigmod','elu'], default='relu', type=str, help='rnncell')
+    parser.add_argument('-a', '--activation', choices=['relu', 'tanh', 'sigmod'], default='relu', type=str, help='rnncell')
     parser.add_argument('-o', '--optimizer', default='adam', type=str, help='rnncell')
     parser.add_argument('-lr', '--learning_rate', default=2e-5, type=float, help='rnncell')
     parser.add_argument('-k', '--keep_prob', default=0.9, type=float, help='rnncell')

@@ -245,6 +245,9 @@ class Trainer(object):
             self.train_costs.append(loss)
 
 
+            if i % 10 == 0:
+                self.log('epoch:{},iters:{},global_step:{},loss:{}'.format(epoch,i,step,loss))
+
             # validation one  batch loss,not decode it
             if step % self.val_loss_per_iters == 0:
                 val_cost = self.run_validate_loss_epoch(sess, batch_size)
@@ -265,7 +268,7 @@ class Trainer(object):
 
 
         # decode val dataset after one epoch
-        if self.is_chief and epoch > 2:
+        if self.is_chief :#and epoch > 2:
             decode_cost,decode_cer, decode_wer = self.run_validate_decode_epoch(sess, epoch, batch_size)
             self.val_costs.append([step, decode_cost])
             self.cer_costs.append([step, decode_cer])
@@ -318,14 +321,21 @@ class Trainer(object):
             real_batch_num += 1
             if self.args.model == 'ds2':
                 feed_dict = self.get_feed_dict(batch, 'sparse')
+                loss, pre, y = sess.run([self.classifier.loss,
+                                        self.classifier.predictions,
+                                        self.classifier.targetY],
+                                        feed_dict=feed_dict)
+                label_seq_lens = None # no use
+
             else:
                 feed_dict = self.get_feed_dict(batch, 'dense')
-
-            loss, pre, y,label_seq_lens = sess.run([self.classifier.loss,
+                loss, pre, y,label_seq_lens = sess.run([self.classifier.loss,
                                      self.classifier.predictions,
                                      self.classifier.targetY,
                                      self.classifier.target_seq_length],
                                     feed_dict=feed_dict)
+
+
             avg_loss += loss
 
             we, wn, ce, cn = self.decode(y, pre, i, batch_size, label_seq_length=label_seq_lens)
@@ -370,7 +380,7 @@ class Trainer(object):
     def initModelParams(self,sess,is_cluster=False):
         if self.is_chief:
             print('===========master initModelParams=================')
-            if self.args.restoremodel == 'yes':
+            if self.args.restoremodel == 'yes' or not self.is_training:
                 ckpt = tf.train.get_checkpoint_state(self.args.savepath)
                 if ckpt and ckpt.model_checkpoint_path:
                     self.classifier.saver.restore(sess, ckpt.model_checkpoint_path)
@@ -387,10 +397,10 @@ class Trainer(object):
 
     #greedy decode
     def decode(self, y, pred, batch_no, batch_size, debuglines =1, logfile='decode_dev.txt', label_seq_length=None):
-        print(y.shape)
-        print(y)
+        #print(y.shape)
+        #print(y)
         if self.args.model == 'las':
-            ys = output_to_sequence_dense(y, self.index_map)
+            ys = output_to_sequence_dense(y, self.index_map, label_length=label_seq_length)
         else:
             ys = output_to_sequence(y, self.index_map)
         preds = output_to_sequence(pred, self.index_map)
@@ -402,7 +412,7 @@ class Trainer(object):
 
         twordn = tworde = 0
         tcharn = tchare = 0
-        self.log('validation batch:{},'.format(batch_no),logfile=logfile)
+        self.log('decode batch:{},'.format(batch_no),logfile=logfile)
         for i in range(reallines):
             ground_truth = ys[i].encode('utf-8')
             predstr = preds[i].encode('utf-8')
@@ -420,3 +430,98 @@ class Trainer(object):
     def log(self,info, logfile='trainlog.txt'):
         log(info,logfilename = logfile, savepath = self.args.savepath)
 
+
+
+
+class TestTrainer(Trainer):
+    def __init__(self,args):
+        args.mode='test'
+        super(TestTrainer,self).__init__(args, args.model,os.path.join(args.savepath,'alphabet.txt'))
+
+    def init(self, major_time=False, max_input_time_length=1000, fit_samples=100):
+
+        if self.args.model == 'las':
+            max_time_length = self.classifier.max_input_length
+            max_label_length = self.classifier.max_target_length
+        else:
+            max_time_length = max_input_time_length
+            max_label_length = None
+
+        if len(self.args.testfiles) > 0:
+            self.test_batchgen = DataGenerator(self.args.testfiles, major_time=major_time,
+                                                max_time_length=max_time_length, max_label_length=max_label_length)
+            if len(self.args.fitfiles) > 0:
+                self.fit_batchgen = DataGenerator(self.args.fitfiles, major_time=major_time,
+                                                  max_time_length=max_time_length, max_label_length=max_label_length)
+                self.fit_batchgen.fit_train(fit_samples)
+                self.test_batchgen.feats_std = self.fit_batchgen.feats_std
+                self.test_batchgen.feats_mean = self.fit_batchgen.feats_mean
+            else:
+                self.test_batchgen.fit_train(fit_samples)
+
+        if len(self.args.testfiles) == 0 :
+            raise Exception('no test json desc files.')
+
+    def run_test_decode_epoch(self, sess, epoch, batch_size=16):
+
+        batch_num = self.test_batchgen.get_batch_num(batch_size)
+
+        self.log('Epoch:{},begin test, batch_num:{}'.format(epoch, batch_num))
+
+        total_err = total_num = 0
+        tchar_err = tchar_num = 0
+
+        avg_loss = 0.0
+        avg_cer = -1
+        avg_wer = -1
+
+        test_batchs = self.test_batchgen.iterate_test(batch_size, allow_smaller_final_batch=False)
+        real_batch_num = 0
+        for i, batch in enumerate(test_batchs):
+            real_batch_num += 1
+            if self.args.model == 'ds2':
+                feed_dict = self.get_feed_dict(batch, 'sparse')
+                loss, pre, y = sess.run([self.classifier.loss,
+                                         self.classifier.predictions,
+                                         self.classifier.targetY],
+                                        feed_dict=feed_dict)
+                label_seq_lens = None  # no use
+
+            else:
+                feed_dict = self.get_feed_dict(batch, 'dense')
+                loss, pre, y, label_seq_lens = sess.run([self.classifier.loss,
+                                                         self.classifier.predictions,
+                                                         self.classifier.targetY,
+                                                         self.classifier.target_seq_length],
+                                                        feed_dict=feed_dict)
+
+            avg_loss += loss
+
+            we, wn, ce, cn = self.decode(y, pre, i, batch_size, label_seq_length=label_seq_lens,logfile='testlog.txt')
+            total_err += we
+            total_num += wn
+            tchar_err += ce
+            tchar_num += cn
+            if total_num != 0:
+                avg_wer = float(total_err * 1.0 / total_num)
+            if tchar_num != 0:
+                avg_cer = float(tchar_err * 1.0 / tchar_num)
+
+        avg_loss /= real_batch_num
+
+        self.log('Epoch:{},end {} test, avg_loss:{}, cer:{},wer:{}'.format(epoch, real_batch_num, avg_loss, avg_cer,
+                                                                            avg_wer), logfile='testlog.txt')
+        return avg_loss, avg_cer, avg_wer
+
+
+    def test(self):
+        config = tf.ConfigProto()
+        config.gpu_options.per_process_gpu_memory_fraction = self.args.gpu_fraction or 1.0
+        config.gpu_options.allow_growth = True
+        config.allow_soft_placement = True
+
+        with tf.Session(graph=self.classifier.graph, config=config) as sess:
+            self.initModelParams(sess)
+
+            self.run_test_decode_epoch(sess, 1, self.args.batch_size)
+        pass

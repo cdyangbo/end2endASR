@@ -1,7 +1,10 @@
 #-*- coding:utf-8 -*-
+from __future__ import print_function
 import os
-import  time
+import time
 from functools import wraps
+from six.moves import configparser
+import json
 
 def log(info, logfilename='log.txt',savepath = None, debug=True):
     t = time.localtime(int(time.time()))
@@ -25,6 +28,19 @@ class dotdict(dict):
     __setattr__ = dict.__setitem__
     __delattr__ = dict.__delitem__
 
+
+def loadIniConfs(filename, section):
+    parsed_cfg = configparser.ConfigParser()
+    parsed_cfg.read(filename)
+    cfg = dict(parsed_cfg.items(section))
+    print(cfg)
+    return cfg
+
+def loadJsonConfs(filename):
+    f = open(filename)
+    cfg = json.load(f)
+    #print(cfg)
+    return cfg
 
 def loadArgs(filename='args.conf'):
     args = {}
@@ -80,3 +96,16 @@ def describe(func):
         print(str(func.__name__+' in '+ str(end-start)+' s'))
         return result
     return wrapper
+
+if __name__ == '__main__':
+    ci = loadIniConfs('../conf/las_network.conf', 'las')
+
+    cj = loadJsonConfs('../conf/a.json')
+
+    print(cj.rnncell,cj['rnncell'])
+    #a = '{"a":1,"b":"aaaa"}'
+
+    ##aa = dotdict(json.load(open('../conf/a.json')))
+
+    ##print(aa.key,aa.text)
+    ##print(dict(json.load(open('../conf/a.json'))))

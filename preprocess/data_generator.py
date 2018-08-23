@@ -100,8 +100,9 @@ class DataGenerator(object):
                     except Exception as e:
                         print(str(e),'Error read line#{}:{}'.format(line_num,json_line))
 
-        print('success load_desc_files:{}, >maxtime<{}>files:{}, total_files:{}'.format(total_files-nouse_files,max_duration,nouse_files,total_files))
-        self.fit_train(k_samples=10)
+        self.total_durations = sum(self.durations)/3600.0 # hours
+        print('success load_desc_files{},used files:{}, used hours:{}, duration > {}sec no used files:{}'.format(' '.join(jsonfiles), total_files-nouse_files, self.total_durations, max_duration, nouse_files))
+        self.fit_train(k_samples=100)
 
     def get_batch_num(self,batch_size=16):
         return len(self.feat_label_paths) // batch_size

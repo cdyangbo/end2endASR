@@ -76,6 +76,11 @@ def graph2(dirs, save_file, average_window=100):
         save_file (str): Filename of the output plot
         average_window (int): Window size for smoothening the graphs
     """
+    fig_size = plt.rcParams["figure.figsize"]
+    print(fig_size)
+    fig_size[0] = 15
+    fig_size[1] = 15
+    #plt.rcParams["figure.figsize"] = fig_size
     p1 = plt.subplot(211)
     p1.set_xlabel('Iters')
     p1.set_ylabel('Loss')
@@ -89,6 +94,7 @@ def graph2(dirs, save_file, average_window=100):
     for i, d in enumerate(dirs):
         name = os.path.basename(os.path.abspath(d))
         color = colors[i % len(colors)]
+        color1 = colors[i+1 % len(colors)]
         costs = np.load(os.path.join(d, 'costs.npz'))
         train_costs = costs['train']
         if train_costs.ndim == 1:
@@ -101,21 +107,21 @@ def graph2(dirs, save_file, average_window=100):
             # validate cost is [step,cost] per sample
             valid_range = valid_costs_with_step[:,0].tolist()
             valid_costs = valid_costs_with_step[:,1].tolist()
-            p1.plot(valid_range, valid_costs,'-o', color=color, label=name + '_valid')
+            p1.plot(valid_range, valid_costs, color=color1, label=name + '_valid')
 
         if 'cer_with_step' in costs.files:
             cer_costs_with_step = costs['cer_with_step']
             # validate cost is [step,cost] per sample
             cer_range = cer_costs_with_step[:,0].tolist()
             cer_costs = cer_costs_with_step[:,1].tolist()
-            p2.plot(cer_range, cer_costs,'-o', color=color, label=name + '_cer')
+            p2.plot(cer_range, cer_costs, color=color, label=name + '_cer')
 
         if 'wer_with_step' in costs.files:
             wer_costs_with_step = costs['wer_with_step']
             # validate cost is [step,cost] per sample
             wer_range = wer_costs_with_step[:,0].tolist()
             wer_costs = wer_costs_with_step[:,1].tolist()
-            p2.plot(wer_range, wer_costs,'-o', color=color, label=name + '_wer')
+            p2.plot(wer_range, wer_costs, color=color1, label=name + '_wer')
 
 
     p1.grid(True)
